@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vento Hosting Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <section id="loginScreen" class="login-shell">
+    <div class="login-panel">
+      <div class="brand-mark">VH</div>
+      <h1>Hosting Control</h1>
+      <p>Panel centralizado para desplegar, reiniciar, optimizar y promocionar tus webs.</p>
+      <form id="loginForm" class="form-stack">
+        <label>
+          Usuario
+          <input name="username" autocomplete="username" value="josue_dev" required>
+        </label>
+        <label>
+          Contrasena
+          <input name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <button type="submit" class="primary-btn">Entrar al panel</button>
+        <span id="loginError" class="error-text"></span>
+      </form>
+      <div class="trust-strip">
+        <span>JWT</span>
+        <span>bcrypt</span>
+        <span>CSRF</span>
+        <span>Rate limit</span>
+      </div>
+    </div>
+  </section>
+
+  <main id="app" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="side-head">
+        <div class="brand-mark small">VH</div>
+        <div>
+          <strong>Vento Host</strong>
+          <span>Control 24/7</span>
+        </div>
+      </div>
+      <nav class="nav-tabs">
+        <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+        <button class="nav-btn admin-only" data-view="clients">Clientes</button>
+        <button class="nav-btn" data-view="resilience">Salud & Rollback</button>
+        <button class="nav-btn" data-view="studio">Marketing Studio</button>
+        <button class="nav-btn" data-view="growth">Promocion Gratis</button>
+        <button class="nav-btn" data-view="analytics">Analitica & Datos</button>
+        <button class="nav-btn" data-view="security">Servidor & SSL</button>
+      </nav>
+      <button id="logoutBtn" class="ghost-btn">Cerrar sesion</button>
+    </aside>
+
+    <section class="content">
+      <header class="topbar">
+        <div>
+          <h2 id="viewTitle">Dashboard</h2>
+          <p id="viewSubtitle">Gestiona sitios independientes sin tumbar los demas.</p>
+        </div>
+        <div class="top-actions">
+          <span id="sessionBadge" class="session-badge">Sesion segura</span>
+          <button id="copyOfficialUrlBtn" class="ghost-btn">Copiar URL oficial</button>
+          <button id="newSiteBtn" class="primary-btn">+ Nuevo sitio</button>
+        </div>
+      </header>
+
+      <section class="command-strip">
+        <div>
+          <span>URL oficial del panel</span>
+          <strong id="officialUrlText">Detectando...</strong>
+        </div>
+        <div>
+          <span>Modo</span>
+          <strong id="deployModeText">Seguro para desarrollo</strong>
+        </div>
+        <div>
+          <span>Ultima revision</span>
+          <strong id="lastRefreshText">--</strong>
+        </div>
+      </section>
+
+      <section class="metrics-grid">
+        <article class="metric">
+          <span>CPU</span>
+          <strong id="cpuMetric">0%</strong>
+          <progress id="cpuBar" max="100" value="0"></progress>
+        </article>
+        <article class="metric">
+          <span>RAM</span>
+          <strong id="ramMetric">0%</strong>
+          <progress id="ramBar" max="100" value="0"></progress>
+        </article>
+        <article class="metric">
+          <span>Disco</span>
+          <strong id="diskMetric">0%</strong>
+          <progress id="diskBar" max="100" value="0"></progress>
+        </article>
+        <article class="metric">
+          <span>Red</span>
+          <strong id="netMetric">0 KB/s</strong>
+          <progress max="100" value="45"></progress>
+        </article>
+      </section>
+
+      <section id="dashboardView" class="view active">
+        <div id="siteGrid" class="site-grid"></div>
+      </section>
+
+      <section id="clientsView" class="view">
+        <div class="tool-layout">
+          <div class="panel">
+            <h3>Accesos de clientes</h3>
+            <form id="clientForm" class="form-stack">
+              <label>Usuario cliente <input id="clientUsername" required placeholder="cliente_tienda"></label>
+              <label>Contrasena temporal <input id="clientPassword" type="password" required></label>
+              <label>Sitio asignado <select id="clientSite"></select></label>
+              <button class="primary-btn" type="submit">Crear acceso limitado</button>
+            </form>
+          </div>
+          <div id="clientList" class="stack-list"></div>
+        </div>
+      </section>
+
+      <section id="resilienceView" class="view">
+        <div class="tool-layout">
+          <div class="panel">
+            <h3>Health checker 24/7</h3>
+            <p>El servidor revisa cada 60 segundos los sitios con autostart activo y reinicia cualquier web detenida o con error HTTP 5xx.</p>
+            <label>Sitio <select id="versionSite"></select></label>
+            <div class="button-row">
+              <button id="loadVersionsBtn" class="primary-btn">Ver historial</button>
+              <button id="optimizeAssetsBtn" class="ghost-btn">Optimizar imagenes WebP</button>
+            </div>
+          </div>
+          <div id="versionsList" class="stack-list"></div>
+        </div>
+      </section>
+
+      <section id="studioView" class="view">
+        <div class="tool-layout">
+          <div class="panel">
+            <h3>Generador de banners y miniaturas</h3>
+            <div class="form-grid">
+              <label>Titulo <input id="bannerTitle" value="Oferta Relampago"></label>
+              <label>Subtitulo <input id="bannerSub" value="Hasta 50% de descuento"></label>
+              <label>CTA <input id="bannerCta" value="Comprar ahora"></label>
+              <label>Prompt IA <textarea id="imagePrompt">Producto premium con luces neon, estilo cyberpunk, fondo limpio</textarea></label>
+            </div>
+            <div class="button-row">
+              <button id="generateBannerBtn" class="primary-btn">Generar imagen</button>
+              <button id="copyGenerateBtn" class="ghost-btn">Copy IA</button>
+              <button id="qrGenerateBtn" class="ghost-btn">QR</button>
+              <button id="downloadPngBtn" class="ghost-btn">PNG</button>
+              <button id="downloadJpgBtn" class="ghost-btn">JPG</button>
+            </div>
+            <label>Sitio para copy/QR <select id="marketingSite"></select></label>
+            <label>Producto o servicio <input id="copyProduct" value="Oferta especial"></label>
+            <pre id="copyOutput" class="code-output compact"></pre>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="bannerCanvas" width="1080" height="1080"></canvas>
+            <img id="qrPreview" class="qr-preview hidden" alt="Codigo QR promocional">
+          </div>
+        </div>
+      </section>
+
+      <section id="growthView" class="view">
+        <div class="tool-layout">
+          <div class="panel">
+            <h3>SEO, indexacion y kits de difusion</h3>
+            <label>Sitio
+              <select id="seoSite"></select>
+            </label>
+            <label>Descripcion base
+              <textarea id="seoDescription">Sitio actualizado con novedades, ofertas y servicios destacados.</textarea>
+            </label>
+            <label>Keywords separadas por coma
+              <input id="seoKeywords" value="ofertas, servicios, web oficial">
+            </label>
+            <div class="button-row">
+              <button id="seoGenerateBtn" class="primary-btn">Crear SEO</button>
+              <button id="seoPingBtn" class="ghost-btn">Ping motores</button>
+            </div>
+          </div>
+          <pre id="seoOutput" class="code-output"></pre>
+        </div>
+        <div class="panel admin-only popup-panel">
+          <h3>Popups y anuncios globales</h3>
+          <label><input id="popupEnabled" type="checkbox"> Activar popup promocional</label>
+          <label>Mensaje <input id="popupMessage" value="Promocion activa por tiempo limitado"></label>
+          <label>Texto del boton <input id="popupCta" value="Ver oferta"></label>
+          <label>URL destino <input id="popupUrl" value="/"></label>
+          <label>Aplicar en
+            <select id="popupSite">
+              <option value="">Todas las webs</option>
+            </select>
+          </label>
+          <button id="applyPopupBtn" class="primary-btn">Aplicar anuncio</button>
+        </div>
+      </section>
+
+      <section id="analyticsView" class="view">
+        <div class="tool-layout">
+          <div class="panel">
+            <h3>Analitica ligera</h3>
+            <label>Sitio <select id="analyticsSite"></select></label>
+            <button id="loadAnalyticsBtn" class="primary-btn">Cargar metricas</button>
+            <pre id="analyticsOutput" class="code-output compact"></pre>
+          </div>
+          <div class="panel">
+            <h3>Explorador de base de datos</h3>
+            <label>Sitio <select id="databaseSite"></select></label>
+            <label>JSON de datos
+              <textarea id="databaseJson" class="editor small-editor" spellcheck="false"></textarea>
+            </label>
+            <div class="button-row">
+              <button id="loadDatabaseBtn" class="ghost-btn">Leer datos</button>
+              <button id="saveDatabaseBtn" class="primary-btn">Guardar cambios</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="securityView" class="view">
+        <div class="tool-layout">
+          <div class="panel ssl-panel">
+            <h3>Preparacion SSL y despliegue 24/7</h3>
+            <p>Ejecuta con PM2 o Docker y coloca Caddy/Nginx delante para HTTPS automatico con Let's Encrypt.</p>
+            <div class="security-grid">
+              <span class="security-pill ok">JWT activo</span>
+              <span class="security-pill ok">Sesion HttpOnly</span>
+              <span class="security-pill ok">CSRF activo</span>
+              <span class="security-pill ok">Rate limit activo</span>
+              <span id="hstsPill" class="security-pill">HSTS listo</span>
+              <span class="security-pill ok">Roles maestro/cliente</span>
+            </div>
+            <pre class="code-output">npm install
+cp .env.example .env
+npm run pm2:start
+
+# Docker
+docker compose up -d --build</pre>
+          </div>
+          <div class="panel">
+            <h3>Dominio oficial</h3>
+            <p>Para que abra como pagina normal en Chrome con tu dominio, apunta el DNS al servidor y define BASE_URL con HTTPS.</p>
+            <label>Ejemplo de dominio
+              <input id="domainExampleInput" value="panel.tudominio.com">
+            </label>
+            <button id="domainChecklistBtn" class="primary-btn">Generar checklist</button>
+            <pre id="domainChecklistOutput" class="code-output compact"></pre>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <dialog id="siteModal" class="modal">
+    <form method="dialog" class="modal-body">
+      <button class="close-btn" value="cancel">x</button>
+      <h3 id="modalTitle">Nuevo sitio</h3>
+      <label>Nombre del proyecto <input id="siteName" required></label>
+      <label>Tipo
+        <select id="siteType">
+          <option value="static">HTML / CSS / JS</option>
+          <option value="node">Node.js Express</option>
+        </select>
+      </label>
+      <label>Codigo fuente
+        <textarea id="siteCode" class="editor" spellcheck="false"></textarea>
+      </label>
+      <div class="button-row end">
+        <button value="cancel" class="ghost-btn">Cancelar</button>
+        <button id="saveSiteBtn" value="default" class="primary-btn">Aplicar cambios</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="logsModal" class="modal">
+    <div class="modal-body log-modal">
+      <button id="closeLogsBtn" class="close-btn">x</button>
+      <h3 id="logsTitle">Logs en vivo</h3>
+      <pre id="logsOutput" class="logs-output"></pre>
+    </div>
+  </dialog>
+
+  <input id="restoreInput" type="file" accept=".zip" hidden>
+  <script src="/app.js"></script>
+</body>
+</html>
