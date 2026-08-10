@@ -14,6 +14,65 @@ function copyPack({ siteName, url, product = '', tone = 'directo' }) {
   };
 }
 
+function escapeXml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&apos;'
+  }[char]));
+}
+
+function wrapLines(text, maxChars = 22, maxLines = 3) {
+  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > maxChars && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+    if (lines.length === maxLines) break;
+  }
+  if (line && lines.length < maxLines) lines.push(line);
+  return lines.length ? lines : ['Promocion premium'];
+}
+
+function bannerSvg({ title = '', subtitle = '', cta = '', prompt = '', colors = [] }) {
+  const palette = colors.length >= 3 ? colors : ['#22d3ee', '#a3e635', '#030712'];
+  const titleLines = wrapLines(title || prompt || 'Promocion premium', 21, 3);
+  const subLines = wrapLines(subtitle || 'Lista para redes sociales', 34, 2);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="${escapeXml(palette[2])}"/>
+      <stop offset=".52" stop-color="${escapeXml(palette[0])}"/>
+      <stop offset="1" stop-color="${escapeXml(palette[1])}"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="26" stdDeviation="24" flood-color="#000" flood-opacity=".35"/>
+    </filter>
+  </defs>
+  <rect width="1080" height="1080" fill="url(#g)"/>
+  <g opacity=".24" fill="none" stroke="#fff" stroke-width="2">
+    ${Array.from({ length: 16 }, (_, index) => `<rect x="${80 + index * 18}" y="${72 + index * 16}" width="${920 - index * 30}" height="${920 - index * 30}" rx="8"/>`).join('')}
+  </g>
+  <rect x="82" y="626" width="916" height="314" rx="18" fill="#030712" opacity=".82" filter="url(#shadow)"/>
+  <text x="122" y="722" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="82" font-weight="900">
+    ${titleLines.map((line, index) => `<tspan x="122" dy="${index ? 88 : 0}">${escapeXml(line.toUpperCase())}</tspan>`).join('')}
+  </text>
+  <text x="124" y="900" fill="#c4f1ff" font-family="Inter, Arial, sans-serif" font-size="38" font-weight="700">
+    ${subLines.map((line, index) => `<tspan x="124" dy="${index ? 46 : 0}">${escapeXml(line)}</tspan>`).join('')}
+  </text>
+  <rect x="704" y="856" width="250" height="72" rx="10" fill="${escapeXml(palette[1])}"/>
+  <text x="829" y="903" text-anchor="middle" fill="#07111c" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="900">${escapeXml((cta || 'Ver oferta').toUpperCase())}</text>
+</svg>`;
+}
+
 function makeQrSvg(text) {
   const size = 29;
   const cells = [];
@@ -36,4 +95,4 @@ function makeQrSvg(text) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#fff"/><g fill="#020617">${cells.join('')}</g></svg>`;
 }
 
-module.exports = { copyPack, makeQrSvg };
+module.exports = { copyPack, makeQrSvg, bannerSvg };

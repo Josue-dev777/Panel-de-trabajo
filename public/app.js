@@ -74,7 +74,16 @@ function showApp() {
   $('#app').classList.remove('hidden');
   const isAdmin = state.user?.role === 'super-admin';
   $$('.admin-only').forEach((item) => item.classList.toggle('hidden', !isAdmin));
+  $$('.client-only').forEach((item) => item.classList.toggle('hidden', isAdmin));
   $('#newSiteBtn').classList.toggle('hidden', !isAdmin);
+  const allowedClientViews = new Set(['dashboard', 'studio', 'analytics']);
+  $$('.nav-btn').forEach((button) => {
+    const allowed = isAdmin || allowedClientViews.has(button.dataset.view);
+    button.classList.toggle('hidden', !allowed);
+  });
+  if (!isAdmin && !allowedClientViews.has($('.nav-btn.active')?.dataset.view)) {
+    switchView('dashboard');
+  }
 }
 
 function showLogin() {
@@ -107,19 +116,30 @@ function renderSites() {
         <div class="meta-box"><span>URL proxy</span><strong><a href="${site.url}" target="_blank">${site.url}</a></strong></div>
         <div class="meta-box"><span>Dominio limpio</span><strong>${escapeHtml(site.cleanUrl)}</strong></div>
         <div class="meta-box"><span>Uptime</span><strong>${formatUptime(site.uptimeMs)}</strong></div>
+        ${!isAdmin ? '<div class="meta-box"><span>Vista cliente</span><strong>Solo métricas y cambios</strong></div>' : ''}
       </div>
-      <div class="button-row">
-        <button class="ghost-btn" data-action="edit" data-id="${site.id}">Actualizar codigo</button>
-        <button class="ghost-btn" data-action="restart" data-id="${site.id}">Reiniciar</button>
-        <button class="${site.status === 'online' ? 'danger-btn' : 'ghost-btn'}" data-action="${site.status === 'online' ? 'stop' : 'start'}" data-id="${site.id}" ${site.status === 'updating' ? 'disabled' : ''}>
-          ${site.status === 'online' ? 'Detener' : 'Iniciar'}
-        </button>
-        <button class="ghost-btn" data-action="logs" data-id="${site.id}">Logs</button>
-        <button class="ghost-btn" data-action="backup" data-id="${site.id}">Backup ZIP</button>
-        <button class="ghost-btn" data-action="restore" data-id="${site.id}">Restaurar</button>
-        <button class="ghost-btn" data-action="versions" data-id="${site.id}">Rollback</button>
-        ${isAdmin ? `<button class="ghost-btn" data-action="settings" data-id="${site.id}">Dominio/Popup</button><button class="danger-btn" data-action="delete" data-id="${site.id}">Eliminar</button>` : ''}
-      </div>
+      ${isAdmin ? `
+        <div class="button-row">
+          <button class="ghost-btn" data-action="edit" data-id="${site.id}">Actualizar codigo</button>
+          <button class="ghost-btn" data-action="restart" data-id="${site.id}">Reiniciar</button>
+          <button class="${site.status === 'online' ? 'danger-btn' : 'ghost-btn'}" data-action="${site.status === 'online' ? 'stop' : 'start'}" data-id="${site.id}" ${site.status === 'updating' ? 'disabled' : ''}>
+            ${site.status === 'online' ? 'Detener' : 'Iniciar'}
+          </button>
+          <button class="ghost-btn" data-action="logs" data-id="${site.id}">Logs</button>
+          <button class="ghost-btn" data-action="backup" data-id="${site.id}">Backup ZIP</button>
+          <button class="ghost-btn" data-action="restore" data-id="${site.id}">Restaurar</button>
+          <button class="ghost-btn" data-action="versions" data-id="${site.id}">Rollback</button>
+          <button class="ghost-btn" data-action="settings" data-id="${site.id}">Dominio/Popup</button>
+          <button class="danger-btn" data-action="delete" data-id="${site.id}">Eliminar</button>
+        </div>
+      ` : `
+        <div class="button-row">
+          <button class="ghost-btn" data-action="open" data-id="${site.id}">Ver web</button>
+          <button class="ghost-btn" data-action="logs" data-id="${site.id}">Actualizaciones</button>
+          <button class="primary-btn" data-action="analytics" data-id="${site.id}">Mis metricas</button>
+          <button class="ghost-btn" data-action="qr" data-id="${site.id}">Mi QR</button>
+        </div>
+      `}
     </article>
   `).join('');
 }
@@ -143,6 +163,23 @@ function renderSiteSelectors() {
 }
 
 async function siteAction(action, id) {
+  if (action === 'open') {
+    const site = state.sites.find((item) => item.id === id);
+    window.open(site?.cleanUrl || site?.url || `/sites/${id}/`, '_blank');
+    return;
+  }
+  if (action === 'analytics') {
+    $('#analyticsSite').value = id;
+    switchView('analytics');
+    await loadAnalytics();
+    return;
+  }
+  if (action === 'qr') {
+    $('#marketingSite').value = id;
+    switchView('studio');
+    await generateQr(false);
+    return;
+  }
   if (action === 'edit') return openEditor(id);
   if (action === 'logs') return openLogs(id);
   if (action === 'backup') return downloadBackup(id);
@@ -402,11 +439,18 @@ async function pingSeo() {
 
 async function generateBanner() {
   const prompt = $('#imagePrompt').value;
-  const ai = await api('/api/marketing/prompt', {
+  const payload = {
+    prompt,
+    title: $('#bannerTitle').value,
+    subtitle: $('#bannerSub').value,
+    cta: $('#bannerCta').value
+  };
+  const generated = await api('/api/marketing/banner', {
     method: 'POST',
-    body: JSON.stringify({ prompt })
+    body: JSON.stringify(payload)
   });
-  drawBanner(ai.colors, ai.headline);
+  await drawBannerFromDataUrl(generated.dataUrl);
+  $('#copyOutput').textContent = `Cartel generado correctamente.\nTitulo: ${generated.headline}`;
 }
 
 async function generateCopy() {
@@ -421,18 +465,20 @@ async function generateCopy() {
   $('#copyOutput').textContent = JSON.stringify(data, null, 2);
 }
 
-async function generateQr() {
+async function generateQr(autoDownload = true) {
   if (!$('#marketingSite').value) {
     throw new Error('Primero crea o selecciona un sitio para generar su QR.');
   }
   const data = await api(`/api/marketing/${$('#marketingSite').value}/qr`);
   $('#qrPreview').src = data.dataUrl;
   $('#qrPreview').classList.remove('hidden');
-  const link = document.createElement('a');
-  link.href = data.dataUrl;
-  link.download = `qr-${$('#marketingSite').value}.png`;
-  link.click();
-  $('#copyOutput').textContent = `QR generado y descargado para:\n${data.url}`;
+  if (autoDownload) {
+    const link = document.createElement('a');
+    link.href = data.dataUrl;
+    link.download = `qr-${$('#marketingSite').value}.png`;
+    link.click();
+  }
+  $('#copyOutput').textContent = `${autoDownload ? 'QR generado y descargado' : 'QR generado'} para:\n${data.url}`;
 }
 
 async function applyPopup() {
@@ -524,6 +570,7 @@ function generateDomainChecklist() {
 function drawBanner(colors = ['#22d3ee', '#a3e635', '#030712'], promptText = '') {
   const canvas = $('#bannerCanvas');
   const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Tu navegador no permitio iniciar el editor Canvas.');
   const title = $('#bannerTitle').value || promptText;
   const sub = $('#bannerSub').value;
   const cta = $('#bannerCta').value;
@@ -559,6 +606,22 @@ function drawBanner(colors = ['#22d3ee', '#a3e635', '#030712'], promptText = '')
   ctx.fillText(cta.toUpperCase(), 150, 940);
 }
 
+function drawBannerFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = $('#bannerCanvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Tu navegador no permitio iniciar el editor Canvas.'));
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve();
+    };
+    image.onerror = () => reject(new Error('No se pudo cargar el cartel generado.'));
+    image.src = dataUrl;
+  });
+}
+
 function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
   const words = String(text).split(' ');
   let line = '';
@@ -576,8 +639,9 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
 }
 
 function downloadCanvas(type) {
+  const canvas = $('#bannerCanvas');
   const link = document.createElement('a');
-  link.href = $('#bannerCanvas').toDataURL(type === 'jpg' ? 'image/jpeg' : 'image/png', .92);
+  link.href = canvas.toDataURL(type === 'jpg' ? 'image/jpeg' : 'image/png', .92);
   link.download = `banner-${Date.now()}.${type === 'jpg' ? 'jpg' : 'png'}`;
   link.click();
 }

@@ -12,12 +12,15 @@ const si = require('systeminformation');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const { WebSocketServer } = require('ws');
 const config = require('./config');
+process.env.XDG_CACHE_HOME = process.env.XDG_CACHE_HOME || path.join(config.root, 'tmp', '.cache');
+fs.mkdirSync(process.env.XDG_CACHE_HOME, { recursive: true });
+const sharp = require('sharp');
 const { signSession, verifySessionToken, authRequired } = require('./middleware/auth');
 const siteManager = require('./services/siteManager');
 const userManager = require('./services/userManager');
 const analyticsService = require('./services/analyticsService');
 const databaseService = require('./services/databaseService');
-const { copyPack } = require('./services/marketingService');
+const { copyPack, bannerSvg } = require('./services/marketingService');
 const logHub = require('./services/logHub');
 const { seoPack, publicSiteUrl, pingIndexes } = require('./services/seoService');
 const QRCode = require('qrcode');
@@ -229,7 +232,7 @@ app.get('/api/sites/:id/code', authRequired, async (req, res, next) => {
 
 app.put('/api/sites/:id/code', authRequired, async (req, res, next) => {
   try {
-    assertSiteAccess(req, req.params.id);
+    requireAdmin(req);
     const site = await siteManager.updateCode(req.params.id, req.body.code || '', req.body.type);
     res.json({ site });
   } catch (error) {
@@ -239,7 +242,7 @@ app.put('/api/sites/:id/code', authRequired, async (req, res, next) => {
 
 app.post('/api/sites/:id/:action(start|stop|restart)', authRequired, async (req, res, next) => {
   try {
-    assertSiteAccess(req, req.params.id);
+    requireAdmin(req);
     const site = await siteManager[req.params.action](req.params.id);
     res.json({ site });
   } catch (error) {
@@ -258,7 +261,7 @@ app.get('/api/sites/:id/logs', authRequired, async (req, res, next) => {
 
 app.get('/api/sites/:id/backup', authRequired, async (req, res, next) => {
   try {
-    assertSiteAccess(req, req.params.id);
+    requireAdmin(req);
     const backup = await siteManager.backup(req.params.id);
     res.download(backup.file, backup.filename);
   } catch (error) {
@@ -268,7 +271,7 @@ app.get('/api/sites/:id/backup', authRequired, async (req, res, next) => {
 
 app.post('/api/sites/:id/restore', authRequired, upload.single('backup'), async (req, res, next) => {
   try {
-    assertSiteAccess(req, req.params.id);
+    requireAdmin(req);
     if (!req.file) return res.status(400).json({ error: 'Archivo ZIP requerido' });
     const site = await siteManager.restore(req.params.id, req.file.path);
     return res.json({ site });
@@ -289,6 +292,7 @@ app.delete('/api/sites/:id', authRequired, async (req, res, next) => {
 
 app.post('/api/seo/:id', authRequired, async (req, res, next) => {
   try {
+    requireAdmin(req);
     const site = assertSiteAccess(req, req.params.id);
     const pack = seoPack({
       name: site.name,
@@ -307,6 +311,7 @@ app.post('/api/seo/:id', authRequired, async (req, res, next) => {
 
 app.post('/api/seo/:id/ping', authRequired, async (req, res, next) => {
   try {
+    requireAdmin(req);
     const site = assertSiteAccess(req, req.params.id);
     const results = await pingIndexes(`${publicSiteUrl(site)}sitemap.xml`);
     res.json({ results });
@@ -344,6 +349,30 @@ app.post('/api/marketing/prompt', authRequired, (req, res) => {
     subhead: 'Imagen generada localmente por plantilla Canvas. Conecta un proveedor IA para generacion fotografica real.',
     colors: [palette[hash % palette.length], palette[(hash + 2) % palette.length], '#030712']
   });
+});
+
+app.post('/api/marketing/banner', authRequired, async (req, res, next) => {
+  try {
+    const prompt = String(req.body.prompt || 'Oferta especial');
+    const palette = ['#06b6d4', '#f97316', '#a3e635', '#e11d48', '#8b5cf6'];
+    const hash = [...prompt].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    const colors = [palette[hash % palette.length], palette[(hash + 2) % palette.length], '#030712'];
+    const svg = bannerSvg({
+      title: req.body.title || prompt,
+      subtitle: req.body.subtitle,
+      cta: req.body.cta,
+      prompt,
+      colors
+    });
+    const png = await sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+    res.json({
+      dataUrl: `data:image/png;base64,${png.toString('base64')}`,
+      colors,
+      headline: String(req.body.title || prompt).slice(0, 72)
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post('/api/marketing/copy', authRequired, (req, res, next) => {
@@ -396,7 +425,7 @@ app.put('/api/sites/:id/settings', authRequired, async (req, res, next) => {
 
 app.post('/api/sites/:id/optimize', authRequired, async (req, res, next) => {
   try {
-    assertSiteAccess(req, req.params.id);
+    requireAdmin(req);
     res.json(await siteManager.optimizeAssets(req.params.id));
   } catch (error) {
     next(error);
@@ -405,7 +434,7 @@ app.post('/api/sites/:id/optimize', authRequired, async (req, res, next) => {
 
 app.get('/api/sites/:id/versions', authRequired, async (req, res, next) => {
   try {
-    assertSiteAccess(req, req.params.id);
+    requireAdmin(req);
     res.json({ versions: await siteManager.versions(req.params.id) });
   } catch (error) {
     next(error);
@@ -414,7 +443,7 @@ app.get('/api/sites/:id/versions', authRequired, async (req, res, next) => {
 
 app.post('/api/sites/:id/rollback', authRequired, async (req, res, next) => {
   try {
-    assertSiteAccess(req, req.params.id);
+    requireAdmin(req);
     const site = await siteManager.rollback(req.params.id, req.body.versionId);
     res.json({ site });
   } catch (error) {
@@ -433,7 +462,7 @@ app.get('/api/analytics/:id', authRequired, (req, res, next) => {
 
 app.get('/api/database/:id', authRequired, async (req, res, next) => {
   try {
-    assertSiteAccess(req, req.params.id);
+    requireAdmin(req);
     res.json(await databaseService.read(req.params.id));
   } catch (error) {
     next(error);
@@ -442,7 +471,7 @@ app.get('/api/database/:id', authRequired, async (req, res, next) => {
 
 app.put('/api/database/:id', authRequired, async (req, res, next) => {
   try {
-    assertSiteAccess(req, req.params.id);
+    requireAdmin(req);
     res.json(await databaseService.write(req.params.id, req.body));
   } catch (error) {
     next(error);
@@ -451,7 +480,7 @@ app.put('/api/database/:id', authRequired, async (req, res, next) => {
 
 app.post('/api/database/:id/:table', authRequired, async (req, res, next) => {
   try {
-    assertSiteAccess(req, req.params.id);
+    requireAdmin(req);
     res.status(201).json({ row: await databaseService.upsertRow(req.params.id, req.params.table, req.body) });
   } catch (error) {
     next(error);
@@ -500,7 +529,7 @@ app.delete('/api/clients/:username', authRequired, async (req, res, next) => {
 });
 
 app.use((error, _req, res, _next) => {
-  console.error(error);
+  if (!error.status || error.status >= 500) console.error(error);
   res.status(error.status || 500).json({ error: error.message || 'Error interno' });
 });
 

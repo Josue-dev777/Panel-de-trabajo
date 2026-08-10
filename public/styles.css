@@ -23,6 +23,18 @@ body {
   font-family: Inter, system-ui, sans-serif;
 }
 
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, .035) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,.75), transparent 78%);
+}
+
 button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 .hidden { display: none !important; }
@@ -281,6 +293,36 @@ progress {
   height: 3px;
   background: linear-gradient(90deg, var(--cyan), var(--lime), var(--rose));
   opacity: .78;
+}
+
+.site-card::after {
+  content: "LIVE";
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  color: rgba(196, 241, 255, .12);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 2.7rem;
+  font-weight: 900;
+  pointer-events: none;
+}
+
+.client-summary {
+  border: 1px solid rgba(34, 211, 238, .24);
+  background: linear-gradient(90deg, rgba(34, 211, 238, .1), rgba(163, 230, 53, .05));
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  display: grid;
+  gap: 4px;
+}
+
+.client-summary strong {
+  color: #c4f1ff;
+}
+
+.client-summary span {
+  color: var(--muted);
 }
 
 .stack-list {

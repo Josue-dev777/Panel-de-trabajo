@@ -70,7 +70,7 @@
         </div>
       </header>
 
-      <section class="command-strip">
+      <section class="command-strip admin-only">
         <div>
           <span>URL oficial del panel</span>
           <strong id="officialUrlText">Detectando...</strong>
@@ -85,7 +85,7 @@
         </div>
       </section>
 
-      <section class="metrics-grid">
+      <section class="metrics-grid admin-only">
         <article class="metric">
           <span>CPU</span>
           <strong id="cpuMetric">0%</strong>
@@ -109,6 +109,10 @@
       </section>
 
       <section id="dashboardView" class="view active">
+        <div class="client-only hidden client-summary">
+          <strong>Vista de cliente</strong>
+          <span>Solo puedes ver tu web asignada, las actualizaciones registradas, tus codigos promocionales y tus metricas de visitas.</span>
+        </div>
         <div id="siteGrid" class="site-grid"></div>
       </section>
 
@@ -213,7 +217,7 @@
             <button id="loadAnalyticsBtn" class="primary-btn">Cargar metricas</button>
             <pre id="analyticsOutput" class="code-output compact"></pre>
           </div>
-          <div class="panel">
+          <div class="panel admin-only">
             <h3>Explorador de base de datos</h3>
             <label>Sitio <select id="databaseSite"></select></label>
             <label>JSON de datos
