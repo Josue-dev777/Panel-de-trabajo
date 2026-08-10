@@ -1,0 +1,15 @@
+{
+  email admin@josue-hc-developer.abrdns.com
+}
+
+josue-hc-developer.abrdns.com {
+  encode zstd gzip
+
+  reverse_proxy {$UPSTREAM_HOST:127.0.0.1}:{$UPSTREAM_PORT:3000}
+
+  header {
+    X-Content-Type-Options nosniff
+    X-Frame-Options SAMEORIGIN
+    Referrer-Policy strict-origin-when-cross-origin
+  }
+}
