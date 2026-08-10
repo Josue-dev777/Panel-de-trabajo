@@ -1,0 +1,16 @@
+{
+  "title": "Landing Page Pro | Sitio oficial",
+  "description": "Sitio de prueba",
+  "keywords": [
+    "hosting",
+    "panel"
+  ],
+  "meta": "<title>Landing Page Pro | Sitio oficial</title>\n<meta name=\"description\" content=\"Sitio de prueba\">\n<meta name=\"keywords\" content=\"hosting, panel\">\n<meta property=\"og:title\" content=\"Landing Page Pro | Sitio oficial\">\n<meta property=\"og:description\" content=\"Sitio de prueba\">\n<meta property=\"og:type\" content=\"website\">\n<meta property=\"og:url\" content=\"http://127.0.0.1:3088/sites/landing-page-pro/\">\n<meta name=\"twitter:card\" content=\"summary_large_image\">",
+  "sitemap": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n  <url>\n    <loc>http://127.0.0.1:3088/sites/landing-page-pro/</loc>\n    <lastmod>2026-08-10T09:11:59.147Z</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>\n</urlset>",
+  "copy": {
+    "x": "Ya esta disponible Landing Page Pro: http://127.0.0.1:3088/sites/landing-page-pro/ #web #lanzamiento",
+    "discord": "Nuevo lanzamiento: **Landing Page Pro**\nSitio de prueba\nhttp://127.0.0.1:3088/sites/landing-page-pro/",
+    "whatsapp": "Mira Landing Page Pro: Sitio de prueba\nhttp://127.0.0.1:3088/sites/landing-page-pro/",
+    "tiktok": "Idea para video: muestra el antes/despues de Landing Page Pro, cierra con \"http://127.0.0.1:3088/sites/landing-page-pro/\" y CTA: visita el enlace."
+  }
+}
