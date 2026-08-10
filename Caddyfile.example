@@ -1,0 +1,12 @@
+{
+  email admin@josue-hc-developer.abrdns.com
+}
+
+# Dominio oficial del panel. El DNS A debe apuntar a la IP publica del servidor.
+josue-hc-developer.abrdns.com {
+  encode zstd gzip
+
+  # Por defecto apunta a Node/PM2 en el host.
+  # En Docker Compose se sobrescribe UPSTREAM_HOST=hosting-panel.
+  reverse_proxy {$UPSTREAM_HOST:127.0.0.1}:{$UPSTREAM_PORT:3000}
+}
