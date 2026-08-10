@@ -2,6 +2,7 @@ const fs = require('fs');
 const http = require('http');
 const fsp = require('fs/promises');
 const path = require('path');
+const crypto = require('crypto');
 const { spawn } = require('child_process');
 const archiver = require('archiver');
 const unzipper = require('unzipper');
@@ -13,6 +14,7 @@ const config = require('../config');
 const { ensureDir, readJson, writeJson } = require('../utils/fs-store');
 const { slugify } = require('../utils/slug');
 const logHub = require('./logHub');
+const githubService = require('./githubService');
 
 class SiteManager {
   constructor() {
@@ -110,6 +112,7 @@ class SiteManager {
       : (supportsSubdomain ? `https://${project.slug}.${base.hostname}/` : `${config.baseUrl.replace(/\/$/, '')}/sites/${project.slug}/`);
     return {
       ...project,
+      github: githubService.publicGithub(project.github, config.baseUrl, project.id),
       status,
       uptimeMs,
       url: `/sites/${project.slug}/`,
@@ -126,7 +129,7 @@ class SiteManager {
     throw new Error('No hay puertos disponibles en el rango configurado');
   }
 
-  async create({ name, type = 'static', code = '', domain = '' }) {
+  async create({ name, type = 'static', code = '', domain = '', deploymentMethod = 'manual', github = {} }) {
     if (!String(name || '').trim()) {
       const error = new Error('Nombre de proyecto requerido');
       error.status = 400;
@@ -153,16 +156,28 @@ class SiteManager {
       port: this.allocatePort(),
       domain: cleanDomain(domain),
       popup: { enabled: false, message: '', cta: '', url: '' },
+      deploymentMethod: deploymentMethod === 'github' ? 'github' : 'manual',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       autostart: true
     };
 
     this.projects.push(project);
-    await this.writeCode(project, code || this.defaultCode(name, type), { skipVersion: true });
-    await this.save();
-    await this.start(project.id);
-    return this.withRuntime(project);
+    try {
+      if (project.deploymentMethod === 'github') {
+        await this.configureGithub(project.id, github, { initial: true });
+      } else {
+        await this.writeCode(project, code || this.defaultCode(name, type), { skipVersion: true });
+        await this.save();
+        await this.start(project.id);
+      }
+      return this.withRuntime(project);
+    } catch (error) {
+      this.projects = this.projects.filter((item) => item.id !== project.id);
+      await fsp.rm(this.siteDir(project), { recursive: true, force: true }).catch(() => {});
+      await this.save();
+      throw error;
+    }
   }
 
   defaultCode(name, type) {
@@ -189,6 +204,10 @@ app.listen(port, () => console.log('Site listening on ' + port));`;
 
   siteDir(project) {
     return path.join(config.paths.sites, project.slug);
+  }
+
+  staticRoot(project) {
+    return project.staticDir ? path.join(this.siteDir(project), project.staticDir) : this.siteDir(project);
   }
 
   async writeCode(project, code, options = {}) {
@@ -239,7 +258,9 @@ app.listen(port, () => console.log('Site listening on ' + port));`;
   }
 
   async recordVersion(project) {
-    const file = path.join(this.siteDir(project), project.type === 'node' ? 'server.js' : 'index.html');
+    const file = project.type === 'node'
+      ? path.join(this.siteDir(project), project.entry || 'server.js')
+      : path.join(this.staticRoot(project), 'index.html');
     try {
       const code = await fsp.readFile(file, 'utf8');
       const versions = await this.versions(project.id);
@@ -279,8 +300,20 @@ app.listen(port, () => console.log('Site listening on ' + port));`;
 
   async readCode(id) {
     const project = this.get(id);
-    const file = path.join(this.siteDir(project), project.type === 'node' ? 'server.js' : 'index.html');
-    return { project: this.withRuntime(project), code: await fsp.readFile(file, 'utf8') };
+    const file = project.type === 'node'
+      ? path.join(this.siteDir(project), project.entry || 'server.js')
+      : path.join(this.staticRoot(project), 'index.html');
+    try {
+      return { project: this.withRuntime(project), code: await fsp.readFile(file, 'utf8') };
+    } catch (error) {
+      if (error.code === 'ENOENT' && project.deploymentMethod === 'github') {
+        return {
+          project: this.withRuntime(project),
+          code: 'Proyecto desplegado desde GitHub. Usa "Sincronizar con GitHub" para traer cambios.'
+        };
+      }
+      throw error;
+    }
   }
 
   async updateCode(id, code, type) {
@@ -295,6 +328,7 @@ app.listen(port, () => console.log('Site listening on ' + port));`;
     if (type && type !== project.type) {
       project.type = type;
     }
+    project.deploymentMethod = project.deploymentMethod || 'manual';
     await this.writeCode(project, code);
     await this.save();
     await this.restart(project.id);
@@ -321,6 +355,74 @@ app.listen(port, () => console.log('Site listening on ' + port));`;
     }
     await this.save();
     return this.withRuntime(project);
+  }
+
+  async configureGithub(id, github = {}, options = {}) {
+    const project = this.get(id);
+    const repoUrl = github.repoUrl || github.repo || project.github?.repoUrl || project.github?.repo;
+    const token = String(github.token || '').trim() || githubService.getSavedToken(project);
+    const saveCredentials = Boolean(github.saveCredentials || project.github?.tokenEncrypted);
+    if (!repoUrl) {
+      const error = new Error('Repositorio de GitHub requerido');
+      error.status = 400;
+      throw error;
+    }
+
+    this.busy.add(project.id);
+    try {
+      if (!options.initial) await this.recordVersion(project).catch(() => {});
+      await this.stop(project.id).catch(() => {});
+      const result = await githubService.deploy({
+        project,
+        repoUrl,
+        branch: github.branch || project.github?.branch,
+        token,
+        saveCredentials,
+        targetDir: this.siteDir(project),
+        log: (line) => {
+          if (line) this.appendLog(project.id, `[github] ${line}`);
+        }
+      });
+
+      project.deploymentMethod = 'github';
+      project.type = result.runtime.type;
+      project.staticDir = result.runtime.staticDir || '';
+      project.startCommand = result.runtime.startCommand || null;
+      project.github = {
+        enabled: true,
+        repo: result.repo,
+        repoUrl: result.repoUrl,
+        branch: result.branch,
+        lastCommit: result.lastCommit,
+        lastCommitAt: result.lastCommitAt,
+        lastSyncAt: result.lastSyncAt,
+        tokenEncrypted: result.tokenEncrypted,
+        webhookSecret: project.github?.webhookSecret || crypto.randomBytes(18).toString('hex')
+      };
+      project.updatedAt = new Date().toISOString();
+      await this.save();
+      await this.optimizeAssets(project.id).catch((error) => this.appendLog(project.id, `[optimizer] ${error.message}`));
+      await this.start(project.id);
+      this.appendLog(project.id, `[github] desplegado commit ${result.lastCommit ? result.lastCommit.slice(0, 7) : 'desconocido'}`);
+      return this.withRuntime(project);
+    } finally {
+      this.busy.delete(project.id);
+    }
+  }
+
+  async syncGithub(id, token = '') {
+    const project = this.get(id);
+    if (project.deploymentMethod !== 'github' || !project.github?.enabled) {
+      const error = new Error('Este sitio no tiene GitHub configurado');
+      error.status = 400;
+      throw error;
+    }
+    return this.configureGithub(project.id, {
+      repoUrl: project.github.repoUrl || project.github.repo,
+      branch: project.github.branch,
+      token,
+      saveCredentials: Boolean(project.github.tokenEncrypted)
+    });
   }
 
   async applyGlobalPopup(popup, siteIds = []) {
@@ -374,16 +476,19 @@ app.listen(port, () => console.log('Site listening on ' + port));`;
 
     const logFile = path.join(config.paths.logs, `${project.slug}.log`);
     const out = fs.createWriteStream(logFile, { flags: 'a' });
-    const script = project.type === 'node'
-      ? path.join(this.siteDir(project), 'server.js')
-      : path.join(config.root, 'src/runtime/static-site-server.js');
+    const command = project.type === 'node'
+      ? (project.startCommand?.command || process.execPath)
+      : process.execPath;
+    const args = project.type === 'node'
+      ? (project.startCommand?.args || [path.join(this.siteDir(project), project.entry || 'server.js')])
+      : [path.join(config.root, 'src/runtime/static-site-server.js')];
 
-    const child = spawn(process.execPath, [script], {
+    const child = spawn(command, args, {
       cwd: this.siteDir(project),
       env: {
         ...process.env,
         PORT: String(project.port),
-        SITE_PUBLIC_DIR: this.siteDir(project)
+        SITE_PUBLIC_DIR: this.staticRoot(project)
       },
       stdio: ['ignore', 'pipe', 'pipe']
     });

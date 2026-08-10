@@ -74,6 +74,7 @@ app.use((req, res, next) => {
 function csrfRequired(req, res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   if (req.path === '/api/auth/login') return next();
+  if (req.path.startsWith('/api/webhooks/github/')) return next();
   const header = req.get('x-csrf-token');
   if (!header || header !== req.cookies.csrf_token) {
     return res.status(403).json({ error: 'Token CSRF invalido' });
@@ -247,6 +248,45 @@ app.post('/api/sites/:id/:action(start|stop|restart)', authRequired, async (req,
     res.json({ site });
   } catch (error) {
     next(error);
+  }
+});
+
+app.put('/api/sites/:id/github', authRequired, async (req, res, next) => {
+  try {
+    requireAdmin(req);
+    const site = await siteManager.configureGithub(req.params.id, req.body || {});
+    res.json({ site });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/sites/:id/github/sync', authRequired, async (req, res, next) => {
+  try {
+    requireAdmin(req);
+    const site = await siteManager.syncGithub(req.params.id, req.body?.token || '');
+    res.json({ site });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/webhooks/github/:id/:secret', async (req, res, next) => {
+  try {
+    const site = siteManager.get(req.params.id);
+    if (!site.github?.webhookSecret || site.github.webhookSecret !== req.params.secret) {
+      return res.status(403).json({ error: 'Webhook no autorizado' });
+    }
+    const refBranch = String(req.body?.ref || '').replace('refs/heads/', '');
+    if (refBranch && site.github.branch && refBranch !== site.github.branch) {
+      return res.json({ ok: true, ignored: true, reason: 'Rama diferente' });
+    }
+    siteManager.syncGithub(site.id).catch((error) => {
+      siteManager.appendLog(site.id, `[github-webhook] ${error.message}`);
+    });
+    return res.json({ ok: true, queued: true });
+  } catch (error) {
+    return next(error);
   }
 });
 

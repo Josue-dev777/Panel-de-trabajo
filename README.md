@@ -39,6 +39,8 @@ node -e "const bcrypt=require('bcryptjs'); console.log(bcrypt.hashSync('tu_contr
 - Mapeo de dominios limpios/subdominios por proyecto para proxy inverso externo.
 - Sitios HTML/CSS/JS estaticos y sitios Node.js Express.
 - Acciones por sitio: iniciar, detener, reiniciar, actualizar codigo y ver logs en vivo.
+- Integracion GitHub por proyecto: crear desde repositorio, guardar PAT cifrado, sincronizar en un clic y webhook unico de auto-deploy.
+- Despliegue GitHub sin depender de `git`: descarga ZIP por API, valida repo/rama/token, ejecuta `npm install` y `npm run build` si el proyecto lo necesita.
 - Health checker cada 60 segundos con auto-reinicio si una web cae o responde HTTP 5xx.
 - Rollback en 1 clic con historial automatico de las ultimas 5 versiones por sitio.
 - Monitor de CPU, RAM, almacenamiento y red.
@@ -85,6 +87,18 @@ ALLOWED_ORIGINS=https://josue-hc-developer.abrdns.com
 ```
 
 Luego apunta el DNS `A`/`AAAA` de `josue-hc-developer.abrdns.com` a la IP del servidor y deja Caddy/Nginx haciendo proxy inverso al puerto del panel. Los sitios alojados pueden usar dominios propios desde el boton `Dominio/Popup` de cada tarjeta.
+
+## Integracion GitHub
+
+En `Nuevo sitio` selecciona `Repositorio de GitHub`, pega `usuario/repositorio` o la URL completa, define la rama si no es `main`/`master` y agrega un PAT solo si el repo es privado o necesitas evitar limites de API. Si marcas `Guardar credenciales`, el token queda cifrado con AES-256-GCM usando una clave derivada de `JWT_SECRET`.
+
+Cada sitio GitHub muestra commit desplegado, fecha de sincronizacion y un webhook unico:
+
+```text
+https://tu-dominio.com/api/webhooks/github/<sitio>/<secreto>
+```
+
+Configuralo en GitHub como webhook `push` con contenido JSON para activar auto-deploy cuando subas cambios a la rama configurada.
 
 ## Estructura
 

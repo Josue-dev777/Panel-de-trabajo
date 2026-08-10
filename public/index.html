@@ -276,6 +276,32 @@ docker compose up -d --build</pre>
           <option value="node">Node.js Express</option>
         </select>
       </label>
+      <label>Metodo de despliegue
+        <select id="deployMethod">
+          <option value="manual">Codigo pegado en el panel</option>
+          <option value="github">Repositorio de GitHub</option>
+        </select>
+      </label>
+      <div id="githubFields" class="github-fields hidden">
+        <div class="github-callout">
+          <strong>Auto-deploy GitHub</strong>
+          <span>Descarga el repositorio, instala dependencias si hay package.json, construye si existe npm run build y reinicia la web.</span>
+        </div>
+        <label>Enlace del repositorio
+          <input id="githubRepo" placeholder="https://github.com/usuario/mi-proyecto o usuario/repositorio">
+        </label>
+        <label>Rama
+          <input id="githubBranch" placeholder="main o master">
+        </label>
+        <label>Token de acceso personal
+          <input id="githubToken" type="password" autocomplete="off" placeholder="ghp_... para repos privados">
+        </label>
+        <label class="inline-check">
+          <input id="githubSaveToken" type="checkbox">
+          Guardar credenciales cifradas para este proyecto
+        </label>
+        <small id="githubSavedHint"></small>
+      </div>
       <label>Codigo fuente
         <textarea id="siteCode" class="editor" spellcheck="false"></textarea>
       </label>

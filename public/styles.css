@@ -387,6 +387,26 @@ button:disabled { cursor: wait; opacity: .55; }
 }
 .meta-box strong { display: block; margin-top: 3px; }
 
+.github-strip {
+  border: 1px solid rgba(34, 211, 238, .18);
+  background: rgba(34, 211, 238, .06);
+  border-radius: 6px;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.github-strip span {
+  font-size: .84rem;
+}
+
+.github-strip code {
+  color: #d9f99d;
+  font-family: "JetBrains Mono", monospace;
+  font-size: .78rem;
+  overflow-wrap: anywhere;
+}
+
 .button-row {
   display: flex;
   flex-wrap: wrap;
@@ -457,6 +477,36 @@ canvas {
   margin-top: 16px;
   display: grid;
   gap: 12px;
+}
+
+.github-fields {
+  border: 1px solid rgba(34, 211, 238, .2);
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, .08), rgba(163, 230, 53, .04)),
+    #050914;
+  border-radius: 8px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.github-callout {
+  display: grid;
+  gap: 4px;
+}
+
+.github-callout strong {
+  color: #c4f1ff;
+}
+
+.inline-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+small {
+  color: var(--muted);
 }
 
 .modal {

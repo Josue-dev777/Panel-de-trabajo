@@ -58,6 +58,13 @@ function formatUptime(ms) {
   return `${hours}h ${minutes}m ${rest}s`;
 }
 
+function formatDate(value) {
+  if (!value) return 'Nunca';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
 function bytes(value) {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let amount = Number(value || 0);
@@ -116,11 +123,18 @@ function renderSites() {
         <div class="meta-box"><span>URL proxy</span><strong><a href="${site.url}" target="_blank">${site.url}</a></strong></div>
         <div class="meta-box"><span>Dominio limpio</span><strong>${escapeHtml(site.cleanUrl)}</strong></div>
         <div class="meta-box"><span>Uptime</span><strong>${formatUptime(site.uptimeMs)}</strong></div>
+        ${site.github?.enabled ? `<div class="meta-box"><span>GitHub</span><strong>${escapeHtml(site.github.repo)} · ${escapeHtml(site.github.branch)}</strong></div>` : ''}
+        ${site.github?.enabled ? `<div class="meta-box"><span>Commit</span><strong>${escapeHtml(site.github.lastCommitShort || 'Pendiente')}</strong></div>` : ''}
         ${!isAdmin ? '<div class="meta-box"><span>Vista cliente</span><strong>Solo métricas y cambios</strong></div>' : ''}
       </div>
+      ${site.github?.enabled ? `<div class="github-strip">
+        <span>Ultima sync: ${escapeHtml(formatDate(site.github.lastSyncAt))}</span>
+        <code>${escapeHtml(site.github.webhookUrl || 'Webhook pendiente')}</code>
+      </div>` : ''}
       ${isAdmin ? `
         <div class="button-row">
           <button class="ghost-btn" data-action="edit" data-id="${site.id}">Actualizar codigo</button>
+          ${site.github?.enabled ? `<button class="primary-btn" data-action="github-sync" data-id="${site.id}">Sincronizar con GitHub</button>` : ''}
           <button class="ghost-btn" data-action="restart" data-id="${site.id}">Reiniciar</button>
           <button class="${site.status === 'online' ? 'danger-btn' : 'ghost-btn'}" data-action="${site.status === 'online' ? 'stop' : 'start'}" data-id="${site.id}" ${site.status === 'updating' ? 'disabled' : ''}>
             ${site.status === 'online' ? 'Detener' : 'Iniciar'}
@@ -130,6 +144,7 @@ function renderSites() {
           <button class="ghost-btn" data-action="restore" data-id="${site.id}">Restaurar</button>
           <button class="ghost-btn" data-action="versions" data-id="${site.id}">Rollback</button>
           <button class="ghost-btn" data-action="settings" data-id="${site.id}">Dominio/Popup</button>
+          <button class="ghost-btn" data-action="github-config" data-id="${site.id}">Configurar GitHub</button>
           <button class="danger-btn" data-action="delete" data-id="${site.id}">Eliminar</button>
         </div>
       ` : `
@@ -187,6 +202,8 @@ async function siteAction(action, id) {
   if (action === 'delete') return deleteSite(id);
   if (action === 'versions') return openVersions(id);
   if (action === 'settings') return updateSiteSettings(id);
+  if (action === 'github-sync') return syncGithub(id);
+  if (action === 'github-config') return openEditor(id, true);
   await api(`/api/sites/${id}/${action}`, { method: 'POST' });
   await loadSites();
 }
@@ -202,20 +219,35 @@ async function updateSiteSettings(id) {
   await loadSites();
 }
 
-async function openEditor(id = null) {
+async function openEditor(id = null, forceGithub = false) {
   state.editingSite = id;
-  $('#modalTitle').textContent = id ? 'Actualizar codigo' : 'Nuevo sitio';
+  $('#modalTitle').textContent = id ? 'Actualizar sitio' : 'Nuevo sitio';
   $('#siteName').disabled = Boolean(id);
   if (id) {
     const data = await api(`/api/sites/${id}/code`);
     $('#siteName').value = data.project.name;
     $('#siteType').value = data.project.type;
     $('#siteCode').value = data.code;
+    $('#deployMethod').value = forceGithub || data.project.deploymentMethod === 'github' ? 'github' : 'manual';
+    $('#githubRepo').value = data.project.github?.repoUrl || data.project.github?.repo || '';
+    $('#githubBranch').value = data.project.github?.branch || '';
+    $('#githubToken').value = '';
+    $('#githubSaveToken').checked = Boolean(data.project.github?.hasToken);
+    $('#githubSavedHint').textContent = data.project.github?.hasToken
+      ? 'Este proyecto ya tiene un token cifrado guardado. Pega uno nuevo solo si quieres reemplazarlo.'
+      : 'Si el repositorio es privado, pega un token y marca guardar credenciales.';
   } else {
     $('#siteName').value = '';
     $('#siteType').value = 'static';
+    $('#deployMethod').value = 'manual';
+    $('#githubRepo').value = '';
+    $('#githubBranch').value = '';
+    $('#githubToken').value = '';
+    $('#githubSaveToken').checked = false;
+    $('#githubSavedHint').textContent = '';
     $('#siteCode').value = defaultTemplate('static');
   }
+  toggleGithubFields();
   $('#siteModal').showModal();
 }
 
@@ -224,13 +256,22 @@ async function saveEditor(event) {
   const payload = {
     name: $('#siteName').value.trim(),
     type: $('#siteType').value,
-    code: $('#siteCode').value
+    code: $('#siteCode').value,
+    deploymentMethod: $('#deployMethod').value,
+    github: githubPayload()
   };
   if (state.editingSite) {
-    await api(`/api/sites/${state.editingSite}/code`, {
-      method: 'PUT',
-      body: JSON.stringify(payload)
-    });
+    if (payload.deploymentMethod === 'github') {
+      await api(`/api/sites/${state.editingSite}/github`, {
+        method: 'PUT',
+        body: JSON.stringify(payload.github)
+      });
+    } else {
+      await api(`/api/sites/${state.editingSite}/code`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      });
+    }
   } else {
     await api('/api/sites', {
       method: 'POST',
@@ -239,6 +280,36 @@ async function saveEditor(event) {
   }
   $('#siteModal').close();
   await loadSites();
+}
+
+function githubPayload() {
+  return {
+    repoUrl: $('#githubRepo').value.trim(),
+    branch: $('#githubBranch').value.trim(),
+    token: $('#githubToken').value,
+    saveCredentials: $('#githubSaveToken').checked
+  };
+}
+
+function toggleGithubFields() {
+  const isGithub = $('#deployMethod').value === 'github';
+  $('#githubFields').classList.toggle('hidden', !isGithub);
+  $('#siteCode').closest('label').classList.toggle('hidden', isGithub);
+  $('#siteType').closest('label').classList.toggle('hidden', isGithub);
+}
+
+async function syncGithub(id) {
+  const site = state.sites.find((item) => item.id === id);
+  let token = '';
+  if (!site?.github?.hasToken) {
+    token = prompt('Este proyecto no tiene token guardado. Pega un GitHub PAT si el repositorio es privado, o deja vacio si es publico.') || '';
+  }
+  await api(`/api/sites/${id}/github/sync`, {
+    method: 'POST',
+    body: JSON.stringify({ token })
+  });
+  await loadSites();
+  await openLogs(id);
 }
 
 function defaultTemplate(type) {
@@ -700,6 +771,7 @@ $('#siteGrid').addEventListener('click', (event) => {
 $('#siteType').addEventListener('change', () => {
   if (!state.editingSite) $('#siteCode').value = defaultTemplate($('#siteType').value);
 });
+$('#deployMethod').addEventListener('change', toggleGithubFields);
 $('#closeLogsBtn').addEventListener('click', () => {
   state.liveLogSite = null;
   $('#logsModal').close();
