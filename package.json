@@ -1,0 +1,43 @@
+{
+  "name": "hosting-control-panel",
+  "version": "1.0.0",
+  "description": "Servidor de hosting multi-sitio con panel de control, marketing studio, SEO y backups.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "NODE_ENV=development node src/server.js",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:logs": "pm2 logs vento-hosting-panel"
+  },
+  "keywords": [
+    "hosting",
+    "express",
+    "dashboard",
+    "seo",
+    "pm2"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "bcryptjs": "^2.4.3",
+    "clean-css": "^5.3.3",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
+    "html-minifier-terser": "^7.2.0",
+    "http-proxy-middleware": "^3.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mime-types": "^2.1.35",
+    "multer": "^2.0.2",
+    "qrcode": "^1.5.4",
+    "sanitize-filename": "^1.6.3",
+    "sharp": "^0.35.3",
+    "systeminformation": "^5.23.5",
+    "terser": "^5.49.2",
+    "unzipper": "^0.12.3",
+    "ws": "^8.18.0"
+  }
+}
