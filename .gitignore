@@ -1,0 +1,8 @@
+node_modules/
+.env
+.npm-cache/
+tmp/
+data/*.json
+logs/*.log
+backups/*.zip
+sites/*/node_modules/
